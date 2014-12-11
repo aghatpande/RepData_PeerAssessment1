@@ -8,18 +8,174 @@ output:
 
 ## Loading and preprocessing the data
 
-
+Using dplyr and lubridate packages to manipulate data and dates and times.
+```{r}
+activitydata<-read.csv("activity.csv")
+library(dplyr)
+library(lubridate)
+activity<-tbl_df(activitydata)
+activity
+```
 
 ## What is mean total number of steps taken per day?
 
+Converting the date column from character to a POSIXct POSIXt class
 
+```{r}
+activity<-mutate(activity,date=ymd(date))
+activity
+```
+To calculate total steps taken in a day, the data need to be grouped by date
+
+```{r}
+by_date<-group_by(activity,date)
+by_date
+```
+
+To plot a hsitogram of total steps taken in a day, we remove NAs and summarize the data after adding up the number of steps taken in a day
+
+```{r}
+steps_in_day<-summarize(by_date,steps_total=sum(steps,na.rm=TRUE))
+head(steps_in_day) 
+```
+We then plot the histogram
+
+```{r}
+hist(steps_in_day$steps_total,col="red",breaks=20,main=" 'Total steps in a day' histogram",xlab="total steps in a day",ylab="days")
+```
+
+To calculate mean total steps in a day
+
+```{r}
+mean_total_steps_daily<-summarize(steps_in_day,mean_steps=mean(steps_total, na.rm=TRUE))
+mean_total_steps_daily
+```
+The mean total steps taken daily are: `r mean_total_steps_daily `
+
+To calculate median total steps in a day
+
+```{r}
+median_total_steps_daily<-summarize(steps_in_day,median_steps=median(steps_total, na.rm=TRUE))
+median_total_steps_daily
+```
+The median total steps daily are : `r median_total_steps_daily`
 
 ## What is the average daily activity pattern?
 
+To find ot the daily pattern of activity, we need to group activity data by interval and then find out the mean of steps in each interval
+
+```{r}
+by_interval<-group_by(activity,interval)
+by_interval
+daily_pattern<-summarize(by_interval,steps_mean=mean(steps,na.rm=TRUE))
+daily_pattern
+```
+
+We then plot the data
+
+```{r}
+plot(daily_pattern,type='l',main="Average daily activity pattern",xlab="daily intervals",ylab="average steps in an interval")
+```
+
+To find the interval with maximum average daily activity we filter the daily pattern data
+
+```{r}
+average_daily_max_activity_interval<-filter(daily_pattern,steps_mean==max(steps_mean))
+average_daily_max_activity_interval
+```
+The interval with on average maximum activity is `r average_daily_max_activity_interval$interval `
 
 
 ## Imputing missing values
 
+To calculate the number of rows with NA's we filter the data
 
+```{r}
+narows<-filter(activity,is.na(steps))
+narows
+```
+
+The number of rows with NAs is `r length(narows$steps)`
+
+We will subsitute NA's in the data with the mean of steps taken in the corresponding intervals where a step count is available; we will call this corrected data as 'activity2'
+
+```{r}
+activity2<-activity
+for (i in seq_along(activity2$steps)){
+if (is.na(activity2$steps[i])==TRUE){
+activity2$steps[i]=daily_pattern$steps_mean[which(daily_pattern$interval==activity2$interval[i])]}
+}
+activity2
+```
+
+As before, to calculate total steps taken in a day, the data need to be grouped by date subsittuting the appropriate data
+
+```{r}
+by_date_2<-group_by(activity2,date)
+by_date_2
+```
+
+To plot a histogram of total steps taken in a day, we summarize the data after adding up the number of steps taken in a day
+
+```{r}
+steps_in_day_2<-summarize(by_date_2,steps_total=sum(steps,na.rm=TRUE))
+head(steps_in_day_2)
+```
+We then plot the histogram
+
+```{r}
+hist(steps_in_day_2$steps_total,col="red",breaks=20,main=" 'Corrected total steps in a day' histogram",xlab="total steps in a day",ylab="days")
+```
+
+To calculate mean total steps in a day
+
+```{r}
+mean_total_steps_daily_2<-summarize(steps_in_day_2,mean_steps=mean(steps_total, na.rm=TRUE))
+mean_total_steps_daily_2
+```
+The corrected mean total steps taken daily are: `r mean_total_steps_daily_2 `
+
+To calculate median total steps in a day
+
+```{r}
+median_total_steps_daily_2<-summarize(steps_in_day_2,median_steps=median(steps_total, na.rm=TRUE))
+median_total_steps_daily_2
+```
+The corrected median total steps daily are : `r median_total_steps_daily_2`
+
+Q: Do these values differ from the estimates in the first part of the assignment?
+A: The corrected mean is greater than the original uncorrected mean where as the corrected median is almost identical to the uncorrected median. This suggests that the median is a more robust statistic for a given dataset.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+We first add an additional column to the corrected data to give us the day of the week for each row.
+
+```{r}
+activity2<-mutate(activity2,day=wday(date))
+```
+We then add another column that indicates whether the given day falls on a weekend or is a weekday
+
+```{r}
+activity2<-activity2 %>% mutate(weekday=ifelse(day==2|day==3|day==4|day==5|day==6,"weekday","weekend"))
+activity2
+```
+
+To calculate daily activity pattern on weekdays and weekends, we manipulate the data further to finally end up with a table that has average steps in every interval on weekdays and weekends
+
+```{r}
+av_steps_weekday<-activity2 %>% filter(weekday=="weekday") %>% group_by(interval) %>% summarize(mean_steps=mean(steps)) %>% mutate(weekday="weekday")
+av_steps_weekday
+av_steps_weekend<-activity2 %>% filter(weekday=="weekend") %>%
+group_by(interval) %>% summarize(mean_steps=mean(steps)) %>% mutate(weekday="weekend")
+av_steps_weekend
+av_steps<-rbind(av_steps_weekday,av_steps_weekend)
+av_steps
+```
+To plot the data we need the ggplot2 library
+```{r}
+library(ggplot2)
+qplot(interval,mean_steps,data=av_steps,geom="line",facets=weekday~., ylab="average steps taken")
+```
+
+We can see that the weekday activity has a peak of activity during the early part of day whereas activity is more sustained during the entire day on weekends.
+
